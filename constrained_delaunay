@@ -1,8 +1,9 @@
 # HG changeset patch
-# Parent 50fd1f939541424c3431ff6442d7f50c48ae7d87
-diff -r 50fd1f939541 -r 4284c51112bb library/CMakeLists.txt
---- a/library/CMakeLists.txt	Tue Nov 16 21:36:10 2010 +0100
-+++ b/library/CMakeLists.txt	Thu Nov 18 08:56:48 2010 +0100
+# Parent b300e53dbfc6257b36abf9781792fe2164115237
+
+diff -r b300e53dbfc6 library/CMakeLists.txt
+--- a/library/CMakeLists.txt	Sun Nov 14 17:52:06 2010 +0100
++++ b/library/CMakeLists.txt	Thu Nov 18 14:52:29 2010 +0100
 @@ -23,6 +23,7 @@
  	include/ProceduralLathe.h
  	include/ProceduralShape.h
@@ -19,9 +20,9 @@ diff -r 50fd1f939541 -r 4284c51112bb library/CMakeLists.txt
  	)
  
  include_directories( ${OIS_INCLUDE_DIRS}
-diff -r 50fd1f939541 -r 4284c51112bb library/include/Procedural.h
---- a/library/include/Procedural.h	Tue Nov 16 21:36:10 2010 +0100
-+++ b/library/include/Procedural.h	Thu Nov 18 08:56:48 2010 +0100
+diff -r b300e53dbfc6 library/include/Procedural.h
+--- a/library/include/Procedural.h	Sun Nov 14 17:52:06 2010 +0100
++++ b/library/include/Procedural.h	Thu Nov 18 14:52:29 2010 +0100
 @@ -44,5 +44,6 @@
  #include "ProceduralLathe.h"
  #include "ProceduralShape.h"
@@ -29,10 +30,10 @@ diff -r 50fd1f939541 -r 4284c51112bb library/include/Procedural.h
 +#include "ProceduralTriangulator.h"
  
  #endif
-diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralTriangulator.h
+diff -r b300e53dbfc6 library/include/ProceduralTriangulator.h
 --- /dev/null	Thu Jan 01 00:00:00 1970 +0000
-+++ b/library/include/ProceduralTriangulator.h	Thu Nov 18 08:56:48 2010 +0100
-@@ -0,0 +1,128 @@
++++ b/library/include/ProceduralTriangulator.h	Thu Nov 18 14:52:29 2010 +0100
+@@ -0,0 +1,141 @@
 +/*
 +-----------------------------------------------------------------------------
 +This source file is part of ogre-procedural
@@ -99,24 +100,37 @@ diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralTriangulator.h
 +	{
 +		segments.push_back(Segment(points, i1, i2));
 +	}
++	void addSegment(const Segment& seg)
++	{
++		segments.push_back(seg);
++	}
++	
++	std::vector<Ogre::Vector2> getPointList()
++	{
++		//TODO compute subset of points
++	}
 +};
 +
 +struct AngleSorter
 +{
++	const PointList& points;
 +	Segment baseLR;
-+	AngleSorter(Segment baseLR) : baseLR(baseLR) {}
++	AngleSorter(const PointList& points, Segment baseLR) : baseLR(baseLR), points(points) {}
 +	
-+	bool operator() (Segment s1, Segment s2)
++	Ogre::Radian getAngle(int i)
 +	{
-+		Ogre::Vector2 v1 = s1.toVector();
-+		Ogre::Vector2 v2 = s2.toVector();
-+		Ogre::Radian angle1 = Utils::angleBetween(baseLR.toVector(), (v1 - baseLR.p2()));	
-+		Ogre::Radian angle2 = Utils::angleBetween(baseLR.toVector(), (v2 - baseLR.p2()));
-+		return angle1 < angle2;
++		Ogre::Vector2 v = points[i].toVector();
++		Ogre::Radian angle = Utils::angleBetween(baseLR.toVector(), (v - baseLR.p2()));
++		return angle;
++	}
++	
++	bool operator() (int i1, int i2)
++	{
++		return getAngle(i1) < getAngle(i2);
 +	}
 +};
 +
-+typedef std::vector<SegmentBuffer> SegmentListList;
++typedef std::vector<SegmentBuffer> SegmentBufferList;
 +
 +
 +public:
@@ -135,7 +149,7 @@ diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralTriangulator.h
 +{
 +	Ogre::Vector2 center;
 +	float radius;
-+	static Circle From3Points(Ogre::Vector2 p1, Ogre::Vector2 p2, Ogre::Vector2 p3)
++	static Circle from3Points(Ogre::Vector2 p1, Ogre::Vector2 p2, Ogre::Vector2 p3)
 +	{
 +		Circle c;
 +		Ogre::Vector2 c1 = .5*(p1+p2);
@@ -162,34 +176,37 @@ diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralTriangulator.h
 +}
 +#endif
 \ No newline at end of file
-diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralUtils.h
---- a/library/include/ProceduralUtils.h	Tue Nov 16 21:36:10 2010 +0100
-+++ b/library/include/ProceduralUtils.h	Thu Nov 18 08:56:48 2010 +0100
-@@ -134,6 +134,20 @@
+diff -r b300e53dbfc6 library/include/ProceduralUtils.h
+--- a/library/include/ProceduralUtils.h	Sun Nov 14 17:52:06 2010 +0100
++++ b/library/include/ProceduralUtils.h	Thu Nov 18 14:52:29 2010 +0100
+@@ -134,6 +134,23 @@
  			return n%cap;
  		return (cap-1)-((1+n)%cap);
  	}
 +
++	/**
++	 * Equivalent of Ogre::Vector3::angleBetween, applied to Ogre::Vector2
++	 */
 +	static Ogre::Radian angleBetween(const Ogre::Vector2& v1, const Ogre::Vector2& v2)
-+{
-+	Ogre::Real lenProduct = v1.length() * v2.length();
-+	// Divide by zero check
++	{
++		// TODO : also compute angle greater than PI
++		Ogre::Real lenProduct = v1.length() * v2.length();
++		// Divide by zero check
 +		if(lenProduct < 1e-6f)
-+	lenProduct = 1e-6f;
-+
-+	Ogre::Real f = v1.dotProduct(v2) / lenProduct;
++			lenProduct = 1e-6f;
++		
++		Ogre::Real f = v1.dotProduct(v2) / lenProduct;
 +	
-+	f = Ogre::Math::Clamp(f, (Ogre::Real)-1.0, (Ogre::Real)1.0);
-+	return Ogre::Math::ACos(f);
-+}
-+
++		f = Ogre::Math::Clamp(f, (Ogre::Real)-1.0, (Ogre::Real)1.0);
++		return Ogre::Math::ACos(f);
++	}
  };
  }
  #endif
-diff -r 50fd1f939541 -r 4284c51112bb library/src/ProceduralTriangulator.cpp
+diff -r b300e53dbfc6 library/src/ProceduralTriangulator.cpp
 --- /dev/null	Thu Jan 01 00:00:00 1970 +0000
-+++ b/library/src/ProceduralTriangulator.cpp	Thu Nov 18 08:56:48 2010 +0100
-@@ -0,0 +1,129 @@
++++ b/library/src/ProceduralTriangulator.cpp	Thu Nov 18 14:52:29 2010 +0100
+@@ -0,0 +1,168 @@
 +/*
 +-----------------------------------------------------------------------------
 +This source file is part of ogre-procedural
@@ -225,26 +242,65 @@ diff -r 50fd1f939541 -r 4284c51112bb library/src/ProceduralTriangulator.cpp
 +{
 +Triangulator::SegmentBuffer Triangulator::delaunayMerge(SegmentBuffer leftSegmentBuffer, SegmentBuffer rightSegmentBuffer)
 +{
-+	// Find the lowest segment beteween left and right that doesn't intersect another segment
++	// TODO Find the lowest segment beteween left and right that doesn't intersect another segment
 +	Segment LR(leftSegmentBuffer.points);
 +	// List of new segments
-+	SegmentBuffer newSegmentList(leftSegmentBuffer.points);
++	SegmentBuffer newSegmentBuffer(leftSegmentBuffer.points);
++	const PointList& points = rightSegmentBuffer.points;
 +	
-+	// Find right candidate
-+	bool foundRightCandidate = false;	
-+	AngleSorter as(LR);
-+	std::sort(rightSegmentBuffer.points.begin(), rightSegmentBuffer.points.end(), as);
-+	// TODO check angle is less than 180 degrees
-+	// TODO check circle is ok
-+	int i=0;
-+	while (!foundRightCandidate)
++	bool finished = false;
++	while (!finished)
 +	{
-+		//TODO
++	// ---Find right candidate
++	bool foundRightCandidate = false;
++	int rightCandidateIndex = -1;
++	AngleSorter as(points, LR);
++	std::set<int> rightPointIndices = rightSegmentBuffer.getPointList();
++	std::sort(rightPointIndices.begin(), rightPointIndices.end(), as);
++	int i=0;
++	while (!foundRightCandidate && i<rightSegmentBuffer.size())
++	{
++		// check angle is less than 180 degrees
++		Ogre::Radian angle = as.getAngle(i);		
++		if (angle > Ogre::Math::PI)
++		{
++			
++			continue;
++		}
++		
++		// Check that the next point is not inside the circumcircle
++		Circle c = Circle::from3Points(LR.p1(), LR.p2(), points[rightPointIndices[i]]);
++		if (!c.isPointInside(points[rightPointIndices[i+1]]))
++		{
++			foundRightCandidate = true;
++			rightCandidateIndex = rightPointIndices[i];
++		}
 +	}
 +	
 +	// TODO Find left candidate
++	bool foundLeftCandidate = false;
++	int leftCandidateIndex = -1;
 +	
-+	return newSegmentList;
++	if (!foundLeftCandidate && !foundRightCandidate)
++	{
++		finished = true;
++	}
++	else if (foundLeftCandidate && foundRightCandidate)
++	{	
++		// TODO Fight between left and right candidate
++	}
++	else if (foundLeftCandidate)
++	{
++		LR.i1 = leftCandidateIndex;
++		newSegmentBuffer.addSegment(LR);
++	}
++	else if (foundRightCandidate)
++	{
++		LR.i2 = leftCandidateIndex;
++		newSegmentBuffer.addSegment(LR);	
++	}
++	
++	return newSegmentBuffer;
 +}
 +
 +
@@ -264,7 +320,7 @@ diff -r 50fd1f939541 -r 4284c51112bb library/src/ProceduralTriangulator.cpp
 +	std::sort(pointList.begin(), pointList.end(), sortFunction);
 +	
 +	// split into groups of 2 or 3
-+	SegmentListList segmentGroups;
++	SegmentBufferList segmentGroups;
 +	{
 +	int i=0;
 +	while (i<pointList.size())
@@ -294,7 +350,7 @@ diff -r 50fd1f939541 -r 4284c51112bb library/src/ProceduralTriangulator.cpp
 +	// Merge segment lists
 +	while (segmentGroups.size()>1)
 +	{
-+		SegmentListList nextSegmentGroups;
++		SegmentBufferList nextSegmentGroups;
 +		
 +		int i=0;
 +		
