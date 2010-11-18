@@ -1,0 +1,321 @@
+# HG changeset patch
+# Parent 50fd1f939541424c3431ff6442d7f50c48ae7d87
+diff -r 50fd1f939541 -r 4284c51112bb library/CMakeLists.txt
+--- a/library/CMakeLists.txt	Tue Nov 16 21:36:10 2010 +0100
++++ b/library/CMakeLists.txt	Thu Nov 18 08:56:48 2010 +0100
+@@ -23,6 +23,7 @@
+ 	include/ProceduralLathe.h
+ 	include/ProceduralShape.h
+ 	include/ProceduralPath.h
++	include/ProceduralTriangulator.h
+ 	)
+ 
+ set( SRCS
+@@ -40,6 +41,7 @@
+ 		src/ProceduralTubeGenerator.cpp
+ 		src/ProceduralExtruder.cpp
+ 		src/ProceduralLathe.cpp
++		src/ProceduralTriangulator.cpp
+ 	)
+ 
+ include_directories( ${OIS_INCLUDE_DIRS}
+diff -r 50fd1f939541 -r 4284c51112bb library/include/Procedural.h
+--- a/library/include/Procedural.h	Tue Nov 16 21:36:10 2010 +0100
++++ b/library/include/Procedural.h	Thu Nov 18 08:56:48 2010 +0100
+@@ -44,5 +44,6 @@
+ #include "ProceduralLathe.h"
+ #include "ProceduralShape.h"
+ #include "ProceduralPath.h"
++#include "ProceduralTriangulator.h"
+ 
+ #endif
+diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralTriangulator.h
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/library/include/ProceduralTriangulator.h	Thu Nov 18 08:56:48 2010 +0100
+@@ -0,0 +1,128 @@
++/*
++-----------------------------------------------------------------------------
++This source file is part of ogre-procedural
++
++For the latest info, see http://code.google.com/p/ogre-procedural/
++
++Copyright (c) 2010 Michael Broutin
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++THE SOFTWARE.
++-----------------------------------------------------------------------------
++*/
++#ifndef PROCEDURAL_TRIANGULATOR_INCLUDED
++#define PROCEDURAL_TRIANGULATOR_INCLUDED
++
++#include "ProceduralShape.h"
++#include "OgreVector3.h"
++#include "ProceduralUtils.h"
++
++namespace Procedural
++{
++
++class _ProceduralExport Triangulator
++{
++typedef std::vector<Ogre::Vector2> PointList;
++
++struct Segment
++{
++	const PointList& points;
++	int i1, i2;
++
++	Segment(const PointList& pl) : points(pl) {}	
++	Segment(const PointList& pl, int i1, int i2) : points(pl),i1(i1), i2(i2) {}
++	
++	const Ogre::Vector2& p1() { return points[i1];}
++	const Ogre::Vector2& p2() { return points[i2];}
++
++	Ogre::Vector2 toVector() { return points[i2]-points[i1];}
++};
++
++
++struct SegmentBuffer
++{
++	const PointList& points;
++	std::vector<Segment> segments;
++	
++	SegmentBuffer(const PointList& pl) : points(pl) {}
++	void addSegment(int i1, int i2)
++	{
++		segments.push_back(Segment(points, i1, i2));
++	}
++};
++
++struct AngleSorter
++{
++	Segment baseLR;
++	AngleSorter(Segment baseLR) : baseLR(baseLR) {}
++	
++	bool operator() (Segment s1, Segment s2)
++	{
++		Ogre::Vector2 v1 = s1.toVector();
++		Ogre::Vector2 v2 = s2.toVector();
++		Ogre::Radian angle1 = Utils::angleBetween(baseLR.toVector(), (v1 - baseLR.p2()));	
++		Ogre::Radian angle2 = Utils::angleBetween(baseLR.toVector(), (v2 - baseLR.p2()));
++		return angle1 < angle2;
++	}
++};
++
++typedef std::vector<SegmentBuffer> SegmentListList;
++
++
++public:
++	struct TriangleBuffer
++	{
++		std::vector<Ogre::Vector3> points;
++	};
++
++	static TriangleBuffer triangulate(const Shape& shape);
++
++	SegmentBuffer delaunayMerge(SegmentBuffer leftSegmentBuffer, SegmentBuffer rightSegmentBuffer);
++	void delaunay(PointList pointList);
++
++	
++struct Circle
++{
++	Ogre::Vector2 center;
++	float radius;
++	static Circle From3Points(Ogre::Vector2 p1, Ogre::Vector2 p2, Ogre::Vector2 p3)
++	{
++		Circle c;
++		Ogre::Vector2 c1 = .5*(p1+p2);
++		Ogre::Vector2 d1 = (p2-p1).perpendicular();
++		
++		Ogre::Vector2 c2 = .5*(p2+p3);
++		Ogre::Vector2 d2 = (p3-p2).perpendicular();
++		
++		//TODO : find intersection between 2 lines
++		Ogre::Vector2 intersect;
++		
++		c.center = intersect;
++		c.radius = (intersect-c1).length();
++		return c;
++	}
++	
++	bool isPointInside(Ogre::Vector2 p)
++	{
++		return (p-center).length()<radius;
++	}
++};
++};
++
++}
++#endif
+\ No newline at end of file
+diff -r 50fd1f939541 -r 4284c51112bb library/include/ProceduralUtils.h
+--- a/library/include/ProceduralUtils.h	Tue Nov 16 21:36:10 2010 +0100
++++ b/library/include/ProceduralUtils.h	Thu Nov 18 08:56:48 2010 +0100
+@@ -134,6 +134,20 @@
+ 			return n%cap;
+ 		return (cap-1)-((1+n)%cap);
+ 	}
++
++	static Ogre::Radian angleBetween(const Ogre::Vector2& v1, const Ogre::Vector2& v2)
++{
++	Ogre::Real lenProduct = v1.length() * v2.length();
++	// Divide by zero check
++		if(lenProduct < 1e-6f)
++	lenProduct = 1e-6f;
++
++	Ogre::Real f = v1.dotProduct(v2) / lenProduct;
++	
++	f = Ogre::Math::Clamp(f, (Ogre::Real)-1.0, (Ogre::Real)1.0);
++	return Ogre::Math::ACos(f);
++}
++
+ };
+ }
+ #endif
+diff -r 50fd1f939541 -r 4284c51112bb library/src/ProceduralTriangulator.cpp
+--- /dev/null	Thu Jan 01 00:00:00 1970 +0000
++++ b/library/src/ProceduralTriangulator.cpp	Thu Nov 18 08:56:48 2010 +0100
+@@ -0,0 +1,129 @@
++/*
++-----------------------------------------------------------------------------
++This source file is part of ogre-procedural
++
++For the latest info, see http://code.google.com/p/ogre-procedural/
++
++Copyright (c) 2010 Michael Broutin
++
++Permission is hereby granted, free of charge, to any person obtaining a copy
++of this software and associated documentation files (the "Software"), to deal
++in the Software without restriction, including without limitation the rights
++to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
++copies of the Software, and to permit persons to whom the Software is
++furnished to do so, subject to the following conditions:
++
++The above copyright notice and this permission notice shall be included in
++all copies or substantial portions of the Software.
++
++THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
++IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
++FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
++AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
++LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
++OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
++THE SOFTWARE.
++-----------------------------------------------------------------------------
++*/
++#include "ProceduralTriangulator.h"
++
++using namespace Ogre;
++
++namespace Procedural
++{
++Triangulator::SegmentBuffer Triangulator::delaunayMerge(SegmentBuffer leftSegmentBuffer, SegmentBuffer rightSegmentBuffer)
++{
++	// Find the lowest segment beteween left and right that doesn't intersect another segment
++	Segment LR(leftSegmentBuffer.points);
++	// List of new segments
++	SegmentBuffer newSegmentList(leftSegmentBuffer.points);
++	
++	// Find right candidate
++	bool foundRightCandidate = false;	
++	AngleSorter as(LR);
++	std::sort(rightSegmentBuffer.points.begin(), rightSegmentBuffer.points.end(), as);
++	// TODO check angle is less than 180 degrees
++	// TODO check circle is ok
++	int i=0;
++	while (!foundRightCandidate)
++	{
++		//TODO
++	}
++	
++	// TODO Find left candidate
++	
++	return newSegmentList;
++}
++
++
++
++bool sortFunction(Ogre::Vector2 p1, Ogre::Vector2 p2) 
++{ 
++	if (p1.x!=p2.x)
++		return p1.x<p2.x;
++	return p1.y<p2.y;
++}
++
++
++void Triangulator::delaunay(PointList pointList)
++{
++	assert(pointList.size()>=3);
++	// sort by X and Y
++	std::sort(pointList.begin(), pointList.end(), sortFunction);
++	
++	// split into groups of 2 or 3
++	SegmentListList segmentGroups;
++	{
++	int i=0;
++	while (i<pointList.size())
++	{		
++		SegmentBuffer segmentBuffer(pointList);
++		int remaining = pointList.size() - i;
++		if (remaining >=5 || remaining == 3)
++		{	
++			
++			int A = i++;
++			int B = i++;
++			int C = i++;
++			segmentBuffer.addSegment(A,B);			
++			segmentBuffer.addSegment(B,C);
++			segmentBuffer.addSegment(A,C);
++		}
++		else // (remaining == 2 || remaining == 4)
++		{
++			int A = i++;
++			int B = i++;
++			segmentBuffer.addSegment(A,B);			
++		}
++		segmentGroups.push_back(segmentBuffer);
++	}
++	}
++	
++	// Merge segment lists
++	while (segmentGroups.size()>1)
++	{
++		SegmentListList nextSegmentGroups;
++		
++		int i=0;
++		
++		while (i<segmentGroups.size())
++		{
++			int remaining = segmentGroups.size() - i;
++			if (remaining>=2)
++			{
++				SegmentBuffer newList = delaunayMerge(segmentGroups[i++], segmentGroups[i++]);
++				nextSegmentGroups.push_back(newList);
++			}
++			else // remaining == 1
++			{
++				nextSegmentGroups.push_back(segmentGroups[i++]);
++			}
++		}		
++		segmentGroups = nextSegmentGroups;
++	}
++	
++	// Apply constraints
++}
++
++
++}
